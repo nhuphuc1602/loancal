@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Tính lãi vay & lãi kép trên gốc trả tháng + tính lãi kép riêng</title>
+<style>
+  body { font-family: Arial, sans-serif; padding: 20px; max-width: 1000px; margin: auto; }
+  h2 { border-bottom: 2px solid #444; padding-bottom: 6px; }
+  input, button, select { padding: 8px; margin: 6px 0; width: 100%; box-sizing: border-box; }
+  label { font-weight: bold; display: block; margin-top: 12px; }
+  table { border-collapse: collapse; width: 100%; margin-top: 20px; font-size: 14px; }
+  th, td { border: 1px solid #ccc; padding: 6px; text-align: right; }
+  th { background: #eee; }
+  .currency { text-align: right; }
+  .container-flex {
+    display: flex; gap: 40px;
+    flex-wrap: wrap;
+  }
+  .box {
+    flex: 1 1 450px;
+    border: 1px solid #ccc;
+    padding: 12px;
+    border-radius: 6px;
+    background: #f9f9f9;
+  }
+</style>
+</head>
+<body>
+
+<h1>Tính lãi vay + lãi kép trên gốc trả tháng trong ân hạn + tính lãi kép riêng</h1>
+
+<div class="container-flex">
+
+  <!-- Phần 1: Lãi vay trả góp & lãi kép trên gốc trả tháng trong ân hạn -->
+  <div class="box">
+    <h2>Lãi vay trả góp & lãi kép trên gốc trả tháng trong ân hạn</h2>
+
+    <label>Số tiền vay (VND):</label>
+    <input type="number" id="principal" value="2500000000" />
+
+    <label>Số năm vay:</label>
+    <input type="number" id="loanYears" value="10" min="1" />
+
+    <label>Số năm trả (có thể khác số năm vay):</label>
+    <input type="number" id="repaymentYears" value="5" min="1" />
+
+    <label>Lãi suất theo từng năm (%), cách nhau dấu phẩy (vd: 3,7,7,9,...):</label>
+    <input type="text" id="interestRates" value="3.2,7,7,9,9,9,9,9,9,9" />
+
+    <label>Số năm ân hạn gốc (chỉ trả lãi):</label>
+    <input type="number" id="gracePeriodYears" value="2" min="0" />
+
+    <label>Lãi suất kép trong thời gian ân hạn (% năm):</label>
+    <input type="number" id="compoundAnnualRate" value="5" step="0.01" min="0" />
+
+    <button onclick="calculateLoanWithCompound()">Tính lãi vay & lãi kép trên gốc trả tháng ân hạn</button>
+
+    <div id="loanSummary" style="margin-top:12px; font-weight:bold;"></div>
+
+    <table id="loanTable" style="display:none;">
+      <thead>
+        <tr>
+          <th>Tháng</th>
+          <th>Năm</th>
+          <th>Gốc trả tháng (VND)</th>
+          <th>Lãi tháng (VND)</th>
+          <th>Tổng trả tháng (VND)</th>
+          <th>Dư nợ còn lại (VND)</th>
+          <th>Lãi kép trên gốc trả tháng (VND)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+  <!-- Phần 2: Tính lãi kép trên số tiền góp hàng tháng -->
+  <div class="box">
+    <h2>Tính lãi kép trên số tiền góp hàng tháng (tiết kiệm góp đều)</h2>
+
+    <label>Số tiền góp hàng tháng (VND):</label>
+    <input type="number" id="monthlyDeposit" value="10000000" />
+
+    <label>Lãi suất năm (%):</label>
+    <input type="number" id="compoundYearlyRate" value="5" step="0.01" min="0" />
+
+    <label>Số tháng góp:</label>
+    <input type="number" id="compoundMonths" value="60" min="1" />
+
+    <button onclick="calculateCompound()">Tính toán lãi kép góp đều</button>
+
+    <div id="compoundSummary" style="margin-top:12px; font-weight:bold;"></div>
+
+    <table id="compoundTable" style="display:none;">
+      <thead>
+        <tr>
+          <th>Tháng</th>
+          <th>Số tiền góp tháng (VND)</th>
+          <th>Lãi tháng (VND)</th>
+          <th>Tổng tiền tích lũy (VND)</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
+</div>
+
+<script>
+// Định dạng tiền VND
+function formatVND(num) {
+  return num.toLocaleString('vi-VN', {maximumFractionDigits:0}) + ' ₫';
+}
+
+// ==== Phần 1: Tính lãi vay + lãi kép trên gốc trả tháng trong ân hạn ====
+
+function calculateLoanWithCompound() {
+  const principal = Number(document.getElementById('principal').value);
+  const loanYears = Number(document.getElementById('loanYears').value);
+  const repaymentYears = Number(document.getElementById('repaymentYears').value);
+  const gracePeriodYears = Number(document.getElementById('gracePeriodYears').value);
+  const compoundAnnualRate = Number(document.getElementById('compoundAnnualRate').value);
+  const interestRatesStr = document.getElementById('interestRates').value;
+
+  if (repaymentYears < gracePeriodYears) {
+    alert('Số năm trả phải lớn hơn hoặc bằng số năm ân hạn.');
+    return;
+  }
+
+  let interestRates = interestRatesStr.split(',').map(x => parseFloat(x.trim()));
+  if (interestRates.length < loanYears) {
+    alert(`Bạn cần nhập đủ lãi suất cho ${loanYears} năm.`);
+    return;
+  }
+
+  const totalMonths = repaymentYears * 12;
+  const graceMonths = gracePeriodYears * 12;
+  const repayMonths = totalMonths - graceMonths;
+
+  let remainingPrincipal = principal;
+  const schedule = [];
+
+  // Gốc mỗi tháng chia theo số năm vay (chứ ko phải số năm trả)
+  const principalPerMonth = principal / (loanYears * 12);
+
+  // Lãi suất kép tháng trong ân hạn
+  const monthlyCompoundRate = compoundAnnualRate / 100 / 12;
+
+  // Để tính lãi kép trên phần gốc trả tháng trong ân hạn,
+  // ta coi số gốc trả tháng trong ân hạn như khoản góp tiết kiệm từng tháng,
+  // áp dụng công thức lãi kép tích lũy.
+
+  // Mảng giữ tổng lãi kép từng tháng (cộng dồn)
+  let compoundInterestAccumulate = 0;
+
+  for (let month = 1; month <= totalMonths; month++) {
+    const yearIndex = Math.min(Math.floor((month - 1) / 12), interestRates.length - 1);
+    const monthlyInterestRate = interestRates[yearIndex] / 100 / 12;
+
+    // Lãi tháng trên dư nợ còn lại (lãi vay)
+    const interest = remainingPrincipal * monthlyInterestRate;
+
+    // Gốc trả tháng (chỉ khi hết ân hạn)
+    let principalPayment = 0;
+    if (month > graceMonths) {
+      principalPayment = principalPerMonth;
+      if (principalPayment > remainingPrincipal) principalPayment = remainingPrincipal;
+      remainingPrincipal -= principalPayment;
+    }
+
+    // Tính lãi kép trên gốc trả tháng trong ân hạn (cộng dồn)
+    let compoundInterestThisMonth = 0;
+    if (month <= graceMonths) {
+      // Gốc trả tháng trong ân hạn: ở đây tính gốc trả tháng bằng 0 (do ân hạn gốc)
+      // Nhưng nếu có gốc trả tháng trong ân hạn, bạn có thể thay đổi logic này.
+      // Thông thường trong ân hạn gốc thì gốc trả tháng = 0 nên mình giả định =0.
+      // Nếu bạn tính gốc trả tháng trong ân hạn theo kiểu khác thì sửa lại dòng dưới.
+
+      // Ở đây, giả sử gốc trả tháng trong ân hạn được tính bằng principalPerMonth để tính lãi kép.
+      // Nếu không có thì gán 0.
+
+      const principalInGrace = principalPerMonth; // bạn có thể điều chỉnh
+
+      // Áp dụng lãi kép cho từng tháng gốc trả trong ân hạn (giống góp tiết kiệm)
+      // Lãi kép tháng: Số tiền góp tháng * ( (1 + monthlyRate)^(monthsLeft) - 1 )
+      // Vì mỗi tháng góp khác thời điểm, nên lãi từng tháng khác nhau, ta tính lãi tháng này sau n tháng còn lại.
+
+      const monthsLeft = graceMonths - month + 1;
+      compoundInterestThisMonth = principalInGrace * (Math.pow(1 + monthlyCompoundRate, monthsLeft) - 1);
+      compoundInterestAccumulate += compoundInterestThisMonth;
+    }
+
+    schedule.push({
+      month,
+      year: Math.ceil(month / 12),
+      principalPayment,
+      interest,
+      totalPayment: principalPayment + interest,
+      remainingPrincipal,
+      compoundInterestThisMonth,
+      compoundInterestAccumulate
+    });
+  }
+
+  // Tính tổng gốc trả và tổng lãi vay
+  let totalPrincipalPaid = 0;
+  let totalInterestPaid = 0;
+  schedule.forEach(s => {
+    totalPrincipalPaid += s.principalPayment;
+    totalInterestPaid += s.interest;
+  });
+
+  // Hiển thị kết quả
+  document.getElementById('loanSummary').innerHTML = `
+    Tổng gốc đã trả: <span style="color:green;">${formatVND(totalPrincipalPaid)}</span><br>
+    Tổng lãi đã trả: <span style="color:red;">${formatVND(totalInterestPaid)}</span><br>
+    <br>
+    Lãi kép phát sinh trên gốc trả tháng trong thời gian ân hạn: <span style="color:blue;">${formatVND(schedule.length ? schedule[graceMonths -1].compoundInterestAccumulate : 0)}</span>
+  `;
+
+  // Hiển thị bảng
+  const tbody = document.querySelector('#loanTable tbody');
+  tbody.innerHTML = '';
+  schedule.forEach(row => {
+    tbody.innerHTML += `
+      <tr>
+        <td>${row.month}</td>
+        <td>${row.year}</td>
+        <td class="currency">${formatVND(row.principalPayment)}</td>
+        <td class="currency">${formatVND(row.interest)}</td>
+        <td class="currency">${formatVND(row.totalPayment)}</td>
+        <td class="currency">${formatVND(row.remainingPrincipal)}</td>
+        <td class="currency">${formatVND(row.compoundInterestThisMonth)}</td>
+      </tr>
+    `;
+  });
+  document.getElementById('loanTable').style.display = 'table';
+}
+
+// ==== Phần 2: Tính lãi kép trên số tiền góp hàng tháng ====
+
+function calculateCompound() {
+  const monthlyDeposit = Number(document.getElementById('monthlyDeposit').value);
+  const yearlyRate = Number(document.getElementById('compoundYearlyRate').value);
+  const months = Number(document.getElementById('compoundMonths').value);
+
+  const monthlyRate = yearlyRate / 100 / 12;
+  let totalAmount = 0;
+  let totalInterest = 0;
+  const schedule = [];
+
+  for (let m = 1; m <= months; m++) {
+    // Số tiền góp tháng m được tính lãi kép từ tháng m tới cuối kỳ
+    const monthsLeft = months - m + 1;
+    const interest = monthlyDeposit * (Math.pow(1 + monthlyRate, monthsLeft) - 1);
+    const total = monthlyDeposit + interest;
+
+    totalAmount += total;
+    totalInterest += interest;
+
+    schedule.push({
+      month: m,
+      deposit: monthlyDeposit,
+      interest,
+      total
+    });
+  }
+
+  const totalPrincipal = monthlyDeposit * months;
+
+  document.getElementById('compoundSummary').innerHTML = `
+    Tổng số tiền góp: <span style="color:green;">${formatVND(totalPrincipal)}</span><br>
+    Lãi kép phát sinh: <span style="color:red;">${formatVND(totalInterest)}</span><br>
+    Tổng tiền sau lãi kép: <span style="color:blue;">${formatVND(totalAmount)}</span><br>
+    (Lãi suất tháng: ${(monthlyRate*100).toFixed(3)}% trong ${months} tháng)
+  `;
+
+  // Hiển thị bảng
+  const tbody = document.querySelector('#compoundTable tbody');
+  tbody.innerHTML = '';
+  schedule.forEach(row => {
+    tbody.innerHTML += `
+      <tr>
+        <td>${row.month}</td>
+        <td class="currency">${formatVND(row.deposit)}</td>
+        <td class="currency">${formatVND(row.interest)}</td>
+        <td class="currency">${formatVND(row.total)}</td>
+      </tr>
+    `;
+  });
+  document.getElementById('compoundTable').style.display = 'table';
+}
+</script>
+
+</body>
+</html>
