@@ -215,7 +215,9 @@ function calculateLoanWithCompound() {
     Tổng gốc đã trả: <span style="color:green;">${formatVND(totalPrincipalPaid)}</span><br>
     Tổng lãi đã trả: <span style="color:red;">${formatVND(totalInterestPaid)}</span><br>
     <br>
-    Lãi kép phát sinh trên gốc trả tháng trong thời gian ân hạn: <span style="color:blue;">${formatVND(schedule.length ? schedule[graceMonths -1].compoundInterestAccumulate : 0)}</span>
+${gracePeriodYears > 0 
+  ? `Lãi kép phát sinh trên gốc trả tháng trong thời gian ân hạn: <span style="color:blue;">${formatVND(schedule[graceMonths - 1]?.compoundInterestAccumulate || 0)}</span>` 
+  : `Không có thời gian ân hạn nên không phát sinh lãi kép.`}
   `;
 
   // Hiển thị bảng
